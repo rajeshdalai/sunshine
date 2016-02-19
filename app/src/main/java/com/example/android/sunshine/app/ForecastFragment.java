@@ -1,5 +1,6 @@
 package com.example.android.sunshine.app;
 
+import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.Settings;
@@ -13,8 +14,10 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,7 +42,7 @@ public class ForecastFragment extends Fragment {
     private ArrayAdapter<String> mForecastAdapter;
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
     }
@@ -54,7 +57,7 @@ public class ForecastFragment extends Fragment {
         int id = item.getItemId();
         if(id == R.id.action_refresh){
             FetchWeatherTask weatherTask = new FetchWeatherTask();
-            weatherTask.execute();
+            weatherTask.execute("94043");
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -86,10 +89,21 @@ public class ForecastFragment extends Fragment {
                         weekForecast);
         ListView listView = (ListView)rootView.findViewById(R.id.listview_forecast);
         listView.setAdapter(mForecastAdapter);
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view,
+                                    int position, long id) {
+                String forecast = mForecastAdapter.getItem(position);
+                Intent intent = new Intent(getActivity(),DetailActivity.class)
+                                .putExtra(Intent.EXTRA_TEXT,forecast);
+                startActivity(intent);
+            }
+        });
+
         return rootView;
     }
 
-    public class FetchWeatherTask extends AsyncTask<String, Void, Void> {
+    public class FetchWeatherTask extends AsyncTask<String, Void, String[]> {
 
         private final String LOG_TAG = FetchWeatherTask.class.getSimpleName();
 
@@ -166,8 +180,9 @@ public class ForecastFragment extends Fragment {
             return resultStrs;
         }
 
+
         @Override
-        protected Void doInBackground(String... params) {
+        protected String[] doInBackground(String... params) {
 
             if(params.length==0)
                 return null;
@@ -194,6 +209,7 @@ public class ForecastFragment extends Fragment {
                         .appendQueryParameter(DAYS_PARAM,Integer.toString(numDays)).build();
 
                 URL url = new URL(builtUri.toString());
+                Log.v(LOG_TAG,"Built URI "+builtUri.toString());
                 urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.setRequestMethod("GET");
                 urlConnection.connect();
@@ -227,10 +243,28 @@ public class ForecastFragment extends Fragment {
                     try {
                         reader.close();
                     } catch (IOException e) {
-                        Log.e(LOG_TAG, "Error closing stream", e);
+                        Log.e(LOG_TAG, "Error closing stream: ", e);
                     }
                 }
-                return  null;
+                try{
+                    return getWeatherDataFromJSON(forecastJsonStr,numDays);
+                } catch (JSONException e) {
+                    Log.e(LOG_TAG,e.getMessage(),e);
+                    e.printStackTrace();
+                }
+            }
+
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(String[] strings) {
+            if(strings != null){
+                mForecastAdapter.clear();
+                for (String dayForecastStr : strings) {
+                    mForecastAdapter.add(dayForecastStr);
+                }
+                //New data is back from the server. Hooray!
             }
         }
     }
